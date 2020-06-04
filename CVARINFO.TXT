@@ -1,0 +1,4 @@
+server bool hdb_enabled = true;
+server bool hdb_wornbackpacks = true;
+server bool hdb_headings = true;
+server bool hdb_weapons = true;

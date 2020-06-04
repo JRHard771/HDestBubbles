@@ -1,0 +1,694 @@
+version "4.3"
+
+class HDestBubbleHandler : EventHandler
+{
+	override void PlayerEntered(PlayerEvent e)
+	{
+        if (CVar.FindCVar("hdb_enabled").GetBool())
+            players[e.PlayerNumber].mo.A_GiveInventory("HDestBubbler", 1);
+	}
+	
+	override void PlayerRespawned(PlayerEvent e)
+	{
+		PlayerEntered(e);
+	}
+}
+
+class HideousBubble : Actor
+{
+    Vector3 home;
+    double shift;
+    double lower;
+    double reach;
+    double pitch_offset;
+    bool just_appeared;
+    bool just_vanished;
+    bool pitch_affected;
+    bool visible;
+    property shift:shift;
+    property lower:lower;
+    property reach:reach;
+    property pitch_affected:pitch_affected;
+    property pitch_offset:pitch_offset;
+    
+    double map(double v, double min_a, double max_a, double min_b, double max_b)
+    {
+        return (v - min_a) / (max_a - min_a) * (max_b - min_b) + min_b;
+    }
+    
+    virtual void MoveHome()
+    {
+        if (target)
+        {
+            if (target.health <= 0)
+            {
+                SetVisible(false);
+            }
+            else
+            {
+                if (just_appeared)
+                {
+                    SetOrigin((target.pos.xy, target.pos.z + target.height * target.player.crouchfactor * 0.5), false);
+                    just_appeared = false;
+                }
+                Vector3 offset;
+                if (pitch_affected)
+                {
+                    double tp = min(75., target.pitch + pitch_offset);
+                    offset = (AngleToVector(target.angle, abs(cos(tp))), -sin(tp)) * reach;
+                }
+                else
+                {
+                    offset = (AngleToVector(target.angle), 0) * reach;
+                }
+                offset += AngleToVector(target.angle - 90., shift);
+                home = (target.pos.xy, target.player.viewz - lower) + offset;
+                SetOrigin(home, true);
+            }
+        }
+    }
+    
+    override void BeginPlay()
+    {
+        visible = false;
+        just_appeared = false;
+        just_vanished = false;
+    }
+    
+    override void Tick()
+    {
+        if (!target)
+            Destroy();
+        
+        if (isFrozen())
+            return;
+        
+        // phantombeta's recommended state advancement code
+        if (tics != -1)
+        {
+          if (tics > 0)
+            tics--;
+          while (!tics)
+          {
+            if (!self || bDestroyed || !CurState || !SetState (CurState.NextState)) // Actor was removed
+            return;
+          }
+        }
+        
+        MoveHome();
+    }
+    
+    virtual void SetVisible(bool setting)
+    {
+        if (setting)
+        {
+            A_SetRenderStyle(1.0, STYLE_Normal);
+            if (!visible)
+                just_appeared = true;
+            visible = true;
+        }
+        else
+        {
+            A_SetRenderStyle(0.0, STYLE_None);
+            if (visible)
+                just_vanished = true;
+            visible = false;
+        }
+    }
+    
+    default
+    {
+        +FORCEXYBILLBOARD
+        +NOINTERACTION
+        +NOGRAVITY
+        HideousBubble.shift 0.;
+        HideousBubble.lower 0.;
+        HideousBubble.reach 21.;
+        HideousBubble.pitch_affected true;
+        HideousBubble.pitch_offset 30.;
+        RenderStyle "None";
+        Mass 1600;
+        Height 1.;
+        Radius 0.5;
+    }
+    
+    states
+    {
+    Spawn:
+        SKUL A -1;
+        Stop;
+    }
+}
+
+class Bubble_HDMedikitter : HideousBubble
+{
+    default
+    {
+        scale 0.3;
+    }
+
+    states
+    {
+    Spawn:
+        MEDI # 9
+        {
+            if (target && target.player)
+            {
+                let hdmk = HDMedikitter(target.player.readyweapon);
+                if (hdmk)
+                    frame = (hdmk.weaponstatus[2]<0?1:2);
+                if (target.player.cmd.buttons & BT_ATTACK)
+                {
+                    reach += (7. - reach) * 0.5;
+                    lower += (7. - lower) * 0.5;
+                    A_SetTics(1);
+                }
+                else if (reach < 21. || lower > 0.)
+                {
+                    reach += (21. - reach) * 0.5;
+                    lower += (0. - lower) * 0.5;
+                    A_SetTics(1);
+                }
+            }
+        }
+        Wait;
+    }
+}
+
+class Bubble_HDStimpacker : HideousBubble
+{
+    default
+    {
+        Scale 0.37;
+    }
+    
+    states
+    {
+    Spawn:
+        STIM A 0;
+        #### A 9
+        {
+            if (target && target.player)
+            {
+                let zerk = HDBerserker(target.player.readyweapon);
+                if (zerk)
+                    sprite = GetSpriteIndex("PSTR");
+                else
+                    sprite = GetSpriteIndex("STIM");
+                if (target.player.cmd.buttons & BT_ATTACK)
+                {
+                    reach += (7. - reach) * 0.5;
+                    lower += (7. - lower) * 0.5;
+                    A_SetTics(1);
+                }
+                else if (reach < 21. || lower > 0.)
+                {
+                    reach += (21. - reach) * 0.5;
+                    lower += (0. - lower) * 0.5;
+                    A_SetTics(1);
+                }
+            }
+        }
+        Wait;
+    }
+}
+
+class Bubble_MagManager : HideousBubble
+{    
+    default
+    {
+        HideousBubble.pitch_offset 0.;
+        HideousBubble.lower 12.;
+    }
+
+    states
+    {
+    Spawn:
+        TNT1 A 0;
+        #### # 9
+        {
+            if (target && target.player)
+            {
+                let mmgr = MagManager(target.player.readyweapon);
+                if (mmgr && mmgr.thismag)
+                {
+                    let mag = hdmagammo(mmgr.thismag);
+                    string magsprite;
+                    string roundsprite;
+                    name roundtype;
+                    double scl;
+                    int curmag = mag.mags[mag.mags.size()-1];
+                    [magsprite,roundsprite,roundtype,scl]=mag.getmagsprite(curmag);
+                    sprite = GetSpriteIndex(magsprite);
+                    if (HD9mMag15(mag) && !HD9mMag30(mag))
+                        frame = 0;
+                    else if (magsprite.length() > 4)
+                        frame = magsprite.ByteAt(4) - 65;
+                }
+            }
+        }
+        Wait;
+    }
+}
+
+class Bubble_SecondBloodSticker : HideousBubble
+{
+    default
+    {
+        Scale 0.5;
+    }
+
+    states
+    {
+    Spawn:
+        PBLD A -1;
+        Stop;
+    }
+}
+
+class Bubble_HDBackpack : HideousBubble
+{
+    override void Tick()
+    {
+        super.Tick();
+        if (target)
+            angle = target.angle + 180.;
+    }
+    
+    default
+    {
+        HideousBubble.lower 16.;
+    }
+    
+    states
+    {
+    Spawn:
+        BPAK A -1;
+        Stop;
+    }
+}
+
+class Bubble_WornBackpack : Bubble_HDBackpack
+{
+    default
+    {
+        -FORCEXYBILLBOARD
+        HideousBubble.lower 24.;
+        HideousBubble.reach -16.;
+        HideousBubble.pitch_affected false;
+    }
+}
+
+class Bubble_DERPUsable : HideousBubble
+{
+    override void Tick()
+    {
+        super.Tick();
+        if (target)
+            angle = target.angle;
+    }
+    
+    default
+    {
+        Scale 0.6;
+    }
+    
+    states
+    {
+    Spawn:
+        DERP A 9 NoDelay {if (target) translation = target.translation;}
+        Wait;
+    }
+}
+
+class Bubble_HERPUsable : Bubble_DERPUsable
+{
+    default
+    {
+        HideousBubble.lower 12.;
+        Scale 0.8;
+    }
+    
+    states
+    {
+    Spawn:
+        HERP AB 0;
+        HERP # 9
+        {
+            if (target)
+            {
+                translation = target.translation;
+                if ((target.player.cmd.buttons & BT_ZOOM)
+                    && (target.player.cmd.buttons & BT_ATTACK))
+                    frame = 1;
+                else
+                    frame = 0;
+            }
+        }
+        Wait;
+    }
+}
+
+class Bubble_HDBlueBottler : HideousBubble
+{
+    default
+    {
+        scale 0.3;
+    }
+    
+    states
+    {
+    Spawn:
+        BON1 A 9
+        {
+            if (target)
+            {
+                if (target.player.cmd.buttons & BT_ATTACK)
+                {
+                    reach += (7. - reach) * 0.5;
+                    lower += (3. - lower) * 0.5;
+                    A_SetTics(1);
+                }
+                else if (reach < 21. || lower > 0.)
+                {
+                    reach += (21. - reach) * 0.5;
+                    lower += (0. - lower) * 0.5;
+                    A_SetTics(1);
+                }
+            }
+        }
+        Wait;
+    }
+}
+
+class Bubble_HDFragGrenades : HideousBubble
+{
+    default
+    {
+        scale 0.3;
+    }
+    
+    states
+    {
+    Spawn:
+        FRAG A -1;
+        Stop;
+    }
+}
+
+class Bubble_PlayerHeading : HideousBubble
+{
+    override void PostBeginPlay()
+    {
+        pitch = 90.;
+    }
+    
+    override void Tick()
+    {
+        super.Tick();
+        if (target)
+        {
+            if (target.health > 0 && target.player != players[consoleplayer])
+            {
+                SetVisible(true);
+            }
+            angle = target.angle + 90.;
+            roll = target.pitch;
+        }
+    }
+    
+    default
+    {
+        -FORCEXYBILLBOARD
+        +INTERPOLATEANGLES
+        +FLATSPRITE
+        +ROLLSPRITE
+        HideousBubble.reach 1.;
+    }
+    
+    states
+    {
+    Spawn:
+        HDTR Z -1;
+        Stop;
+    }
+}
+
+class Bubble_ReadyWeapon : HideousBubble
+{
+    override void PostBeginPlay()
+    {
+        pitch = -90.;
+    }
+    
+    override void Tick()
+    {
+        super.Tick();
+        if (target)
+        {
+            if (target.health > 0 && target.player != players[consoleplayer])
+            {
+                SetVisible(true);
+            }
+            let rw = hdweapon(target.player.readyweapon);
+            let hdp = hdplayerpawn(target);
+            angle = (hdp.scopecamera ? hdp.scopecamera.angle : hdp.angle) - 90. + hdp.hudbob.x * 0.1;
+            roll = (hdp.scopecamera ? hdp.scopecamera.pitch : hdp.pitch);
+            lower = hdp.hudbob.y * 0.1;
+            if (rw
+                && !HDWoundFixer(rw)
+                && !HDFragGrenades(rw)
+                && !HDBackpack(rw))
+            {
+                string sprite_name;
+                double sprite_scale = 1.;
+                [sprite_name, sprite_scale] = rw.GetPickupSprite();
+                if (sprite_name.Length() > 4)
+                    frame = sprite_name.ByteAt(4) - 65;
+                sprite_scale *= .7;
+                if (sprite_name != "")
+                {
+                    textureid tex = TexMan.CheckForTexture(sprite_name, TexMan.TYPE_SPRITE);
+                    vector2 toff = TexMan.GetScaledOffset(tex);
+                    vector2 tsize = TexMan.GetScaledSize(tex);
+                    sprite = GetSpriteIndex(sprite_name);
+                    if (sprite_scale)
+                        scale = (sprite_scale, sprite_scale);
+                    else
+                        scale = (.7,.7);
+                    lower += tsize.y * scale.y;
+                    if (HDSMG(rw))
+                        reach = 8.;
+                    else
+                        reach = 16.;
+                    if (HDSMG(rw) || ThunderBuster(rw))
+                        lower += 2.;
+                }
+                else
+                    sprite = GetSpriteIndex("TNT1");
+            }
+            else
+            {
+                sprite = GetSpriteIndex("TNT1");
+            }
+        }
+    }
+    
+    default
+    {
+        -FORCEXYBILLBOARD
+        +INTERPOLATEANGLES
+        +FLATSPRITE
+        +ROLLSPRITE
+        HideousBubble.shift 1.;
+        HideousBubble.pitch_offset 0.;
+    }
+    
+    states
+    {
+    Spawn:
+        TNT1 A 0;
+        #### # 9;
+        Wait;
+    }
+}
+
+class HDestBubbler : Inventory
+{
+    Bubble_HDMedikitter medibubs;
+    Bubble_HDStimpacker stimbubs;
+    Bubble_MagManager magbubs;
+    Bubble_SecondBloodSticker bludbubs;
+    Bubble_HDBackpack packbubs;
+    Bubble_WornBackpack wornbubs;
+    Bubble_DERPUsable derpbubs;
+    Bubble_HERPUsable herpbubs;
+    Bubble_HDBlueBottler potbubs;
+    Bubble_HDFragGrenades fragbubs;
+    Bubble_PlayerHeading headbubs;
+    Bubble_ReadyWeapon weapbubs;
+    transient CVar cv_WornBackpacks;
+    bool wornBackpacks;
+    transient CVar cv_PlayerHeadings;
+    bool showHeadings;
+    transient CVar cv_ReadyWeapon;
+    bool showWeapons;
+    
+	default
+	{
+		+INVENTORY.AUTOACTIVATE;
+		+INVENTORY.PERSISTENTPOWER;
+		+INVENTORY.UNDROPPABLE;
+		+INVENTORY.UNTOSSABLE;
+		Inventory.MaxAmount 1;
+	}
+
+	override void DoEffect()
+	{
+		super.DoEffect();
+        if (!owner || !owner.player)
+            return;
+        let op = owner.player;
+        if (!cv_WornBackpacks)
+        {
+            cv_WornBackpacks = CVar.FindCVar("hdb_wornbackpacks");
+            wornBackpacks = cv_WornBackpacks.GetBool();
+        }
+        if (!cv_PlayerHeadings)
+        {
+            cv_PlayerHeadings = CVar.FindCVar("hdb_headings");
+            showHeadings = cv_PlayerHeadings.GetBool();
+        }
+        if (!cv_ReadyWeapon)
+        {
+            cv_ReadyWeapon = CVar.FindCVar("hdb_weapons");
+            showWeapons = cv_ReadyWeapon.GetBool();
+        }
+        
+        if (owner.health > 0)
+        {
+        
+            // Medikit
+            if (!medibubs)
+            {
+                medibubs = Bubble_HDMedikitter(Actor.Spawn("Bubble_HDMedikitter"));
+                medibubs.target = owner;
+            }
+            medibubs.SetVisible(HDMedikitter(op.readyweapon));
+            
+            
+            // Stimpack or Zerk
+            if (!stimbubs)
+            {
+                stimbubs = Bubble_HDStimpacker(Actor.Spawn("Bubble_HDStimpacker"));
+                stimbubs.target = owner;
+            }
+            stimbubs.SetVisible(HDStimpacker(op.readyweapon));
+            
+            
+            // Magazine Manager
+            if (!magbubs)
+            {
+                magbubs = Bubble_MagManager(Actor.Spawn("Bubble_MagManager"));
+                magbubs.target = owner;
+            }
+            magbubs.SetVisible(MagManager(op.readyweapon));
+            
+            
+            // Second Blood
+            if (!bludbubs)
+            {
+                bludbubs = Bubble_SecondBloodSticker(Actor.Spawn("Bubble_SecondBloodSticker"));
+                bludbubs.target = owner;
+            }
+            bludbubs.SetVisible(SecondBloodSticker(op.readyweapon));
+            
+            
+            // Backpack (Held)
+            if (!packbubs)
+            {
+                packbubs = Bubble_HDBackpack(Actor.Spawn("Bubble_HDBackpack"));
+                packbubs.target = owner;
+            }
+            packbubs.SetVisible(HDBackpack(op.readyweapon));
+            
+            
+            // Backpack (Worn)
+            if (!wornbubs && wornBackpacks)
+            {
+                wornbubs = Bubble_WornBackpack(Actor.Spawn("Bubble_WornBackpack"));
+                wornbubs.target = owner;
+            }
+            if (wornbubs)
+                wornbubs.SetVisible(!HDBackpack(op.readyweapon) && owner.FindInventory("HDBackpack"));
+            
+            
+            // DERP
+            if (!derpbubs)
+            {
+                derpbubs = Bubble_DERPUsable(Actor.Spawn("Bubble_DERPUsable"));
+                derpbubs.target = owner;
+            }
+            derpbubs.SetVisible(DERPUsable(op.readyweapon));
+            
+            
+            // HERP
+            if (!herpbubs)
+            {
+                herpbubs = Bubble_HERPUsable(Actor.Spawn("Bubble_HERPUsable"));
+                herpbubs.target = owner;
+            }
+            herpbubs.SetVisible(HERPUsable(op.readyweapon));
+            
+            
+            // Blue Potion
+            if (!potbubs)
+            {
+                potbubs = Bubble_HDBlueBottler(Actor.Spawn("Bubble_HDBlueBottler"));
+                potbubs.target = owner;
+            }
+            potbubs.SetVisible(HDBlueBottler(op.readyweapon));
+            
+            
+            // Frag Grenade
+            if (!fragbubs)
+            {
+                fragbubs = Bubble_HDFragGrenades(Actor.Spawn("Bubble_HDFragGrenades"));
+                fragbubs.target = owner;
+            }
+            fragbubs.SetVisible(HDFragGrenades(op.readyweapon) && owner.FindInventory("HDFragGrenadeAmmo"));
+            
+            
+            // Player Heading Indicator
+            if (!headbubs && showHeadings)
+            {
+                headbubs = Bubble_PlayerHeading(Actor.Spawn("Bubble_PlayerHeading"));
+                headbubs.target = owner;
+                if (owner.player != players[consoleplayer])
+                    headbubs.SetVisible(true);
+            }
+        
+            // Weapon
+            if (!weapbubs && showWeapons)
+            {
+                weapbubs = Bubble_ReadyWeapon(Actor.Spawn("Bubble_ReadyWeapon"));
+                weapbubs.target = owner;
+                if (owner.player != players[consoleplayer])
+                    weapbubs.SetVisible(true);
+            }
+        }
+	}
+
+	States
+	{
+	Use:
+		TNT1 A 0;
+		Fail;
+	Pickup:
+		TNT1 A 0
+		{
+			return true;
+		}
+		Stop;
+	}
+}

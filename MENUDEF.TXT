@@ -1,0 +1,13 @@
+AddOptionMenu "OptionsMenu"
+{
+	Submenu "Hideous Bubbles", "HDestBubbleMenu"
+}
+
+OptionMenu "HDestBubbleMenu"
+{
+	Title "Hideous Bubbles"
+    Option "Enabled", "hdb_enabled", "OnOff"
+    Option "Show Worn Backpacks", "hdb_wornbackpacks", "OnOff"
+    Option "Show Player Heading Indicators", "hdb_headings", "OnOff"
+    Option "Show Player Weapon", "hdb_weapons", "OnOff"
+}
