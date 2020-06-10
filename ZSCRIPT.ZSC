@@ -452,6 +452,11 @@ class Bubble_ReadyWeapon : HideousBubble
             }
             let rw = hdweapon(target.player.readyweapon);
             let hdp = hdplayerpawn(target);
+            if (!hdp)
+            {
+                sprite = GetSpriteIndex("TNT1");
+                return;
+            }
             angle = (hdp.scopecamera ? hdp.scopecamera.angle : hdp.angle) - 90. + hdp.hudbob.x * 0.1;
             roll = (hdp.scopecamera ? hdp.scopecamera.pitch : hdp.pitch);
             lower = hdp.hudbob.y * 0.1;
