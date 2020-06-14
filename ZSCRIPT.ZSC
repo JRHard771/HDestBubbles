@@ -7,7 +7,6 @@ class HDestBubbleHandler : EventHandler
     
     override void WorldLoaded(WorldEvent e)
     {
-        cv_enabled = CVar.FindCVar("hdb_enabled");
         ticker = 0;
     }
     
@@ -16,6 +15,8 @@ class HDestBubbleHandler : EventHandler
         if (++ticker == 35)
         {
             ticker = 0;
+            if (!cv_enabled)
+                cv_enabled = CVar.FindCVar("hdb_enabled");
             bool enabled = cv_enabled.GetBool();
             for (int pi = 0; pi < 8; pi++)
             {
