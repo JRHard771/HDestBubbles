@@ -2,16 +2,40 @@ version "4.3"
 
 class HDestBubbleHandler : EventHandler
 {
-	override void PlayerEntered(PlayerEvent e)
-	{
-        if (CVar.FindCVar("hdb_enabled").GetBool())
-            players[e.PlayerNumber].mo.A_GiveInventory("HDestBubbler", 1);
-	}
-	
-	override void PlayerRespawned(PlayerEvent e)
-	{
-		PlayerEntered(e);
-	}
+    CVar cv_enabled;
+    int ticker;
+    
+    override void OnRegister()
+    {
+        cv_enabled = CVar.FindCVar("hdb_enabled");
+        ticker = 0;
+    }
+    
+    override void WorldTick()
+    {
+        if (++ticker == 35)
+        {
+            ticker = 0;
+            bool enabled = cv_enabled.GetBool();
+            for (int pi = 0; pi < 8; pi++)
+            {
+                if (playeringame[pi])
+                {
+                    if (enabled)
+                    {
+                        players[pi].mo.A_GiveInventory("HDestBubbler", 1);
+                    }
+                    else
+                    {
+                        HDestBubbler hdb = HDestBubbler(players[pi].mo.FindInventory("HDestBubbler"));
+                        if (hdb)
+                            hdb.Cleanup();
+                        players[pi].mo.A_TakeInventory("HDestBubbler", 1);
+                    }
+                }
+            }
+        }
+    }
 }
 
 class HideousBubble : Actor
@@ -533,11 +557,8 @@ class HDestBubbler : Inventory
     Bubble_PlayerHeading headbubs;
     Bubble_ReadyWeapon weapbubs;
     transient CVar cv_WornBackpacks;
-    bool wornBackpacks;
     transient CVar cv_PlayerHeadings;
-    bool showHeadings;
     transient CVar cv_ReadyWeapon;
-    bool showWeapons;
     
 	default
 	{
@@ -547,28 +568,50 @@ class HDestBubbler : Inventory
 		+INVENTORY.UNTOSSABLE;
 		Inventory.MaxAmount 1;
 	}
+    
+    void Cleanup()
+    {
+        Array<HideousBubble> bubbles;
+        
+        bubbles.push(medibubs);
+        bubbles.push(stimbubs);
+        bubbles.push(magbubs);
+        bubbles.push(bludbubs);
+        bubbles.push(packbubs);
+        bubbles.push(wornbubs);
+        bubbles.push(derpbubs);
+        bubbles.push(herpbubs);
+        bubbles.push(potbubs);
+        bubbles.push(fragbubs);
+        bubbles.push(headbubs);
+        bubbles.push(weapbubs);
+        
+        for (int i = 0; i < bubbles.size(); i++)
+        {
+            if (bubbles[i])
+            {
+                bubbles[i].target = null;
+                bubbles[i] = null;
+            }
+        }
+    }
 
 	override void DoEffect()
 	{
 		super.DoEffect();
         if (!owner || !owner.player)
+        {
             return;
+        }
+        
         let op = owner.player;
+        
         if (!cv_WornBackpacks)
-        {
             cv_WornBackpacks = CVar.FindCVar("hdb_wornbackpacks");
-            wornBackpacks = cv_WornBackpacks.GetBool();
-        }
         if (!cv_PlayerHeadings)
-        {
             cv_PlayerHeadings = CVar.FindCVar("hdb_headings");
-            showHeadings = cv_PlayerHeadings.GetBool();
-        }
         if (!cv_ReadyWeapon)
-        {
             cv_ReadyWeapon = CVar.FindCVar("hdb_weapons");
-            showWeapons = cv_ReadyWeapon.GetBool();
-        }
         
         if (owner.health > 0)
         {
@@ -618,16 +661,6 @@ class HDestBubbler : Inventory
             packbubs.SetVisible(HDBackpack(op.readyweapon));
             
             
-            // Backpack (Worn)
-            if (!wornbubs && wornBackpacks)
-            {
-                wornbubs = Bubble_WornBackpack(Actor.Spawn("Bubble_WornBackpack"));
-                wornbubs.target = owner;
-            }
-            if (wornbubs)
-                wornbubs.SetVisible(!HDBackpack(op.readyweapon) && owner.FindInventory("HDBackpack"));
-            
-            
             // DERP
             if (!derpbubs)
             {
@@ -664,22 +697,50 @@ class HDestBubbler : Inventory
             fragbubs.SetVisible(HDFragGrenades(op.readyweapon) && owner.FindInventory("HDFragGrenadeAmmo"));
             
             
+            // Backpack (Worn)
+            if (!wornbubs && cv_WornBackpacks.GetBool())
+            {
+                wornbubs = Bubble_WornBackpack(Actor.Spawn("Bubble_WornBackpack"));
+                wornbubs.target = owner;
+            }
+            if (wornbubs)
+            {
+                if (!cv_WornBackpacks.GetBool())
+                {
+                    wornbubs.target = null;
+                    wornbubs = null;
+                }
+                else
+                    wornbubs.SetVisible(!HDBackpack(op.readyweapon) && owner.FindInventory("HDBackpack"));
+            }
+            
+            
             // Player Heading Indicator
-            if (!headbubs && showHeadings)
+            if (!headbubs && cv_PlayerHeadings.GetBool())
             {
                 headbubs = Bubble_PlayerHeading(Actor.Spawn("Bubble_PlayerHeading"));
                 headbubs.target = owner;
                 if (owner.player != players[consoleplayer])
                     headbubs.SetVisible(true);
             }
+            else if (headbubs && !cv_PlayerHeadings.GetBool())
+            {
+                headbubs.target = null;
+                headbubs = null;
+            }
         
             // Weapon
-            if (!weapbubs && showWeapons)
+            if (!weapbubs && cv_ReadyWeapon.GetBool())
             {
                 weapbubs = Bubble_ReadyWeapon(Actor.Spawn("Bubble_ReadyWeapon"));
                 weapbubs.target = owner;
                 if (owner.player != players[consoleplayer])
                     weapbubs.SetVisible(true);
+            }
+            else if (weapbubs && !cv_ReadyWeapon.GetBool())
+            {
+                weapbubs.target = null;
+                weapbubs = null;
             }
         }
 	}
