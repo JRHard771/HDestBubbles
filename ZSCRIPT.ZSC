@@ -2,10 +2,10 @@ version "4.3"
 
 class HDestBubbleHandler : EventHandler
 {
-    CVar cv_enabled;
+    transient CVar cv_enabled;
     int ticker;
     
-    override void OnRegister()
+    override void WorldLoaded(WorldEvent e)
     {
         cv_enabled = CVar.FindCVar("hdb_enabled");
         ticker = 0;
@@ -432,9 +432,10 @@ class Bubble_PlayerHeading : HideousBubble
         super.Tick();
         if (target)
         {
-            if (target.health > 0 && target.player != players[consoleplayer])
+            if (target.health <= 0)
             {
-                SetVisible(true);
+                target = null;
+                return;
             }
             angle = target.angle + 90.;
             roll = target.pitch;
@@ -470,9 +471,10 @@ class Bubble_ReadyWeapon : HideousBubble
         super.Tick();
         if (target)
         {
-            if (target.health > 0 && target.player != players[consoleplayer])
+            if (target.health <= 0)
             {
-                SetVisible(true);
+                target = null;
+                return;
             }
             let rw = hdweapon(target.player.readyweapon);
             let hdp = hdplayerpawn(target);
