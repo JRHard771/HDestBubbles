@@ -441,6 +441,10 @@ class Bubble_PlayerHeading : HideousBubble
             angle = target.angle + 90.;
             roll = target.pitch;
         }
+        
+        let shouldBeVisible = target != players[consoleplayer].camera;
+        if (visible != shouldBeVisible)
+            SetVisible(shouldBeVisible);
     }
     
     default
@@ -523,6 +527,10 @@ class Bubble_ReadyWeapon : HideousBubble
             {
                 sprite = GetSpriteIndex("TNT1");
             }
+            
+            let shouldBeVisible = target != players[consoleplayer].camera;
+            if (visible != shouldBeVisible)
+                SetVisible(shouldBeVisible);
         }
     }
     
@@ -723,7 +731,7 @@ class HDestBubbler : Inventory
             {
                 headbubs = Bubble_PlayerHeading(Actor.Spawn("Bubble_PlayerHeading"));
                 headbubs.target = owner;
-                if (owner.player != players[consoleplayer])
+                if (owner != players[consoleplayer].camera)
                     headbubs.SetVisible(true);
             }
             else if (headbubs && !cv_PlayerHeadings.GetBool())
@@ -737,7 +745,7 @@ class HDestBubbler : Inventory
             {
                 weapbubs = Bubble_ReadyWeapon(Actor.Spawn("Bubble_ReadyWeapon"));
                 weapbubs.target = owner;
-                if (owner.player != players[consoleplayer])
+                if (owner != players[consoleplayer].camera)
                     weapbubs.SetVisible(true);
             }
             else if (weapbubs && !cv_ReadyWeapon.GetBool())
