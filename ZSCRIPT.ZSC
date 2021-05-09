@@ -145,6 +145,7 @@ class HideousBubble : Actor
     {
         +FORCEXYBILLBOARD
         +NOINTERACTION
+        +NOBLOCKMAP
         +NOGRAVITY
         HideousBubble.shift 0.;
         HideousBubble.lower 0.;
